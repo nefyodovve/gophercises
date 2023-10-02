@@ -1,6 +1,7 @@
 package urlshort
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"gopkg.in/yaml.v3"
@@ -14,10 +15,11 @@ import (
 // http.Handler will be called instead.
 func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//fmt.Fprintf(os.Stderr, "%+v\n", r)
-		for key, val := range pathsToUrls {
-			if key == r.RequestURI {
-				http.Redirect(w, r, val, http.StatusSeeOther)
+		if pathsToUrls != nil {
+			for key, val := range pathsToUrls {
+				if key == r.RequestURI {
+					http.Redirect(w, r, val, http.StatusSeeOther)
+				}
 			}
 		}
 		fallback.ServeHTTP(w, r)
@@ -41,11 +43,33 @@ func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.Handl
 // See MapHandler to create a similar http.HandlerFunc via
 // a mapping of paths to urls.
 func YAMLHandler(yml []byte, fallback http.Handler) (http.HandlerFunc, error) {
+	if len(yml) == 0 {
+		return MapHandler(nil, fallback), nil
+	}
 	data := []struct {
 		Path string `yaml:"path"`
 		Url  string `yaml:"url"`
 	}{}
 	err := yaml.Unmarshal(yml, &data)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]string)
+	for _, entry := range data {
+		m[entry.Path] = entry.Url
+	}
+	return MapHandler(m, fallback), nil
+}
+
+func JSONHandler(jsonData []byte, fallback http.Handler) (http.HandlerFunc, error) {
+	if len(jsonData) == 0 {
+		return MapHandler(nil, fallback), nil
+	}
+	data := []struct {
+		Path string `json:"path"`
+		Url  string `json:"url"`
+	}{}
+	err := json.Unmarshal(jsonData, &data)
 	if err != nil {
 		return nil, err
 	}
